@@ -547,15 +547,15 @@ function renderAgeChart() {
     const ageData = analysisData.person?.age || [];
     if (ageData.length === 0) return;
     
-    // 固定年齡層排序
+    // 固定年齡層排序（與後端保持一致，使用 '70+' 表示所有70歲以上）
     const ageOrder = ['0-4', '5-9', '10-14', '15-19', '20-24', '25-29', '30-34', 
                       '35-39', '40-44', '45-49', '50-54', '55-59', '60-64', 
-                      '65-69', '70-74', '75-79', '80-84', '85+', '未知'];
+                      '65-69', '70+', '未知'];
     
     const sortedAgeData = ageOrder.map(age => {
         const item = ageData.find(d => d.年齡層 === age);
         return item || { 年齡層: age, 病例數: 0 };
-    });
+    }).filter(d => d.病例數 > 0 || d.年齡層 === '未知'); // 只顯示有資料的年齡層
     
     new Chart(ctx, {
         type: 'bar',

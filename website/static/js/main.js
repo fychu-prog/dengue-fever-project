@@ -1065,16 +1065,16 @@ function renderAgeChart() {
     const ctx = document.getElementById('ageChart').getContext('2d');
     const data = analysisData.person.age; // 已經在後端按固定順序排序
     
-    // 定義年齡層的固定排序順序
+    // 定義年齡層的固定排序順序（與後端保持一致，使用 '70+' 表示所有70歲以上）
     const ageOrder = [
         '0-4', '5-9', '10-14', '15-19', '20-24', '25-29', 
         '30-34', '35-39', '40-44', '45-49', '50-54', '55-59',
-        '60-64', '65-69', '70-74', '75-79', '80-84', '85+', '未知'
+        '60-64', '65-69', '70+', '未知'
     ];
     
     // 確保資料按固定順序排列
     const sortedData = ageOrder.map(age => {
-        const found = data.find(d => d.年齡層 === age || d.年齡層.startsWith(age.split('-')[0]));
+        const found = data.find(d => d.年齡層 === age);
         return found || { 年齡層: age, 病例數: 0 };
     }).filter(d => d.病例數 > 0 || d.年齡層 === '未知'); // 只顯示有資料的年齡層
     

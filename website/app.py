@@ -98,6 +98,8 @@ def get_summary():
         return jsonify({'error': '分析資料不存在'}), 404
 
 
+
+
 @app.route('/api/data/<county>')
 def get_county_data(county):
     """取得特定縣市的資料 API"""
@@ -198,7 +200,7 @@ def filter_data_by_county(data, county_name):
             # 清理資料
             df['居住縣市'] = df['居住縣市'].fillna('未知')
             df['性別'] = df['性別'].fillna('未知')
-            df['年齡層'] = df['年齡層'].fillna('未知')
+            # 年齡層先不 fillna，讓 normalize_age_group 處理
             
             # 處理縣市名稱差異（臺 vs 台）
             # 檢查資料中實際使用的縣市名稱
@@ -215,84 +217,132 @@ def filter_data_by_county(data, county_name):
             # 找出資料中實際存在的匹配名稱
             matching_names = [name for name in possible_names if name in unique_counties]
             
+            actual_county_name = None
             if matching_names:
                 print(f"找到匹配的縣市名稱: {matching_names}")
                 # 使用第一個匹配的名稱
                 actual_county_name = matching_names[0]
-                county_df = df[df['居住縣市'] == actual_county_name]
-                print(f"過濾 {actual_county_name} 的資料，找到 {len(county_df)} 筆記錄")
-                
-                # 驗證資料：顯示性別分布
-                if len(county_df) > 0:
-                    gender_check = county_df.groupby('性別').size()
-                    print(f"{actual_county_name} 性別分布: {gender_check.to_dict()}")
             else:
                 # 如果完全匹配失敗，嘗試部分匹配
                 print(f"警告: 無法找到完全匹配的縣市名稱，嘗試部分匹配...")
-                county_df = df[df['居住縣市'].str.contains(county_name.replace('台', '臺').replace('臺', '台'), na=False)]
-                if len(county_df) > 0:
-                    print(f"部分匹配成功，找到 {len(county_df)} 筆記錄")
-                    print(f"實際縣市名稱: {county_df['居住縣市'].unique()[:5]}")
-                else:
+                for name in possible_names:
+                    matching = df[df['居住縣市'].str.contains(name, na=False, regex=False)]
+                    if len(matching) > 0:
+                        actual_county_name = matching['居住縣市'].iloc[0]
+                        print(f"部分匹配成功，找到 {len(matching)} 筆記錄，實際縣市名稱: {actual_county_name}")
+                        break
+                
+                if not actual_county_name:
                     print(f"錯誤: 無法找到 {county_name} 的資料")
-                    county_df = pd.DataFrame()  # 空資料框
+                    print(f"資料中可用的縣市: {sorted([c for c in unique_counties if pd.notna(c)])[:20]}")
             
-            if len(county_df) > 0:
-                # 計算該縣市的性別分布
-                gender = county_df.groupby('性別').size().reset_index(name='病例數')
-                gender['百分比'] = (gender['病例數'] / gender['病例數'].sum() * 100).round(2)
-                filtered['person']['gender'] = gender.to_dict('records')
+            if actual_county_name:
+                county_df = df[df['居住縣市'] == actual_county_name].copy()
+                print(f"過濾 {actual_county_name} 的資料，找到 {len(county_df)} 筆記錄")
                 
-                # 計算該縣市的年齡層分布
-                # 先處理特殊情況：將單獨的數字（0, 1, 2, 3, 4）合併到 '0-4'
-                county_df_age = county_df.copy()
-                single_digit_ages = ['0', '1', '2', '3', '4']
-                for single_age in single_digit_ages:
-                    county_df_age.loc[county_df_age['年齡層'] == single_age, '年齡層'] = '0-4'
-                
-                age = county_df_age.groupby('年齡層').size().reset_index(name='病例數')
-                age['百分比'] = (age['病例數'] / age['病例數'].sum() * 100).round(2)
-                
-                # 定義年齡層的固定排序順序（包含原始資料中可能出現的格式）
-                age_order = [
-                    '0-4', '5-9', '10-14', '15-19', '20-24', '25-29', 
-                    '30-34', '35-39', '40-44', '45-49', '50-54', '55-59',
-                    '60-64', '65-69', '70-74', '75-79', '80-84', '85+', 
-                    '70+',  # 原始資料中可能使用 '70+' 表示所有70歲以上
-                    '未知'
-                ]
-                
-                # 建立排序映射
-                def get_age_order(age_str):
-                    if pd.isna(age_str) or age_str == '未知':
+                if len(county_df) > 0:
+                    # 驗證資料：顯示性別分布
+                    gender_check = county_df.groupby('性別').size()
+                    print(f"{actual_county_name} 性別分布: {gender_check.to_dict()}")
+                    
+                    # 計算該縣市的性別分布
+                    gender = county_df.groupby('性別').size().reset_index(name='病例數')
+                    gender['百分比'] = (gender['病例數'] / gender['病例數'].sum() * 100).round(2)
+                    filtered['person']['gender'] = gender.to_dict('records')
+                    print(f"{actual_county_name} 性別資料: {filtered['person']['gender']}")
+                    
+                    # 計算該縣市的年齡層分布（與 analyze_dengue.py 保持一致）
+                    # 先處理特殊情況：將單獨的數字（0, 1, 2, 3, 4）合併到 '0-4'
+                    county_df_age = county_df.copy()
+                    # 確保年齡層欄位是字串類型，並處理 NaN
+                    county_df_age['年齡層'] = county_df_age['年齡層'].fillna('未知').astype(str)
+                    # 將 'nan', 'NaN', 'None', '' 轉換為 '未知'
+                    county_df_age.loc[county_df_age['年齡層'].isin(['nan', 'NaN', 'None', '']), '年齡層'] = '未知'
+                    # 將單獨的數字年齡（0-4）合併到 '0-4' 年齡層
+                    single_digit_ages = ['0', '1', '2', '3', '4']
+                    for single_age in single_digit_ages:
+                        county_df_age.loc[county_df_age['年齡層'] == single_age, '年齡層'] = '0-4'
+                    
+                    # 將所有 70 歲以上的年齡層轉換為 '70+'
+                    # 處理 '70+', '70-74', '75-79', '80-84', '85+' 等格式
+                    def normalize_age_group(age_str):
+                        if pd.isna(age_str) or str(age_str).strip() in ['未知', 'nan', 'NaN', 'None', '']:
+                            return '未知'
+                        age_str = str(age_str).strip()
+                        # 如果已經是 '70+'，直接返回
+                        if age_str == '70+':
+                            return '70+'
+                        # 如果以 '70' 開頭（如 '70-74'），轉換為 '70+'
+                        if age_str.startswith('70'):
+                            return '70+'
+                        # 如果包含 '-'，檢查起始年齡
+                        if '-' in age_str:
+                            try:
+                                start_age = int(age_str.split('-')[0])
+                                if start_age >= 70:
+                                    return '70+'
+                            except:
+                                pass
+                        # 如果以數字開頭且 >= 70（如 '75', '80' 等），轉換為 '70+'
+                        try:
+                            if age_str.isdigit() and int(age_str) >= 70:
+                                return '70+'
+                        except:
+                            pass
+                        return age_str
+                    
+                    county_df_age['年齡層'] = county_df_age['年齡層'].apply(normalize_age_group)
+                    
+                    age = county_df_age.groupby('年齡層').size().reset_index(name='病例數')
+                    age['百分比'] = (age['病例數'] / age['病例數'].sum() * 100).round(2)
+                    
+                    # 定義年齡層的固定排序順序（與 analyze_dengue.py 保持一致）
+                    age_order = [
+                        '0-4', '5-9', '10-14', '15-19', '20-24', '25-29', 
+                        '30-34', '35-39', '40-44', '45-49', '50-54', '55-59',
+                        '60-64', '65-69', '70+',  # 原始資料使用 '70+' 表示所有70歲以上
+                        '未知'
+                    ]
+                    
+                    # 建立排序映射（與 analyze_dengue.py 保持一致）
+                    def get_age_order(age_str):
+                        if pd.isna(age_str) or str(age_str).strip() in ['未知', 'nan', 'NaN', 'None', '']:
+                            return len(age_order)
+                        age_str = str(age_str).strip()
+                        # 先嘗試完全匹配
+                        if age_str in age_order:
+                            return age_order.index(age_str)
+                        # 如果不在列表中，放在最後
                         return len(age_order)
-                    age_str = str(age_str).strip()
-                    # 先嘗試完全匹配
-                    if age_str in age_order:
-                        return age_order.index(age_str)
-                    # 嘗試部分匹配
-                    for i, age_range in enumerate(age_order):
-                        if age_str == age_range:
-                            return i
-                        # 處理範圍格式
-                        if '-' in age_range:
-                            start = age_range.split('-')[0]
-                            if age_str.startswith(start):
-                                return i
-                    return len(age_order)
-                
-                age['排序'] = age['年齡層'].apply(get_age_order)
-                age = age.sort_values('排序')
-                age = age.drop('排序', axis=1)
-                filtered['person']['age'] = age.to_dict('records')
+                    
+                    age['排序'] = age['年齡層'].apply(get_age_order)
+                    age = age.sort_values('排序')
+                    age = age.drop('排序', axis=1)
+                    filtered['person']['age'] = age.to_dict('records')
+                    print(f"{actual_county_name} 年齡層資料筆數: {len(filtered['person']['age'])}")
+                    print(f"{actual_county_name} 年齡層: {[item['年齡層'] for item in filtered['person']['age'][:5]]}")
+                    # 特別檢查 70+ 的資料
+                    age_70 = [item for item in filtered['person']['age'] if item['年齡層'] == '70+']
+                    if age_70:
+                        print(f"{actual_county_name} 70+ 病例數: {age_70[0]['病例數']}, 百分比: {age_70[0]['百分比']}%")
+                    else:
+                        print(f"警告: {actual_county_name} 沒有找到 70+ 的資料！")
+                        print(f"所有年齡層: {[item['年齡層'] for item in filtered['person']['age']]}")
+                else:
+                    # 如果沒有找到該縣市的資料，使用空資料
+                    print(f"警告: {actual_county_name} 沒有資料")
+                    filtered['person']['gender'] = []
+                    filtered['person']['age'] = []
             else:
-                # 如果沒有找到該縣市的資料，使用空資料
+                # 如果無法匹配縣市名稱，使用空資料
+                print(f"錯誤: 無法匹配縣市名稱 {county_name}，使用空資料")
                 filtered['person']['gender'] = []
                 filtered['person']['age'] = []
         else:
-            # 如果原始資料不存在，使用整體資料
-            if 'person' in data:
-                filtered['person'] = data['person']
+            # 如果原始資料不存在，使用空資料（不應該使用整體資料）
+            print(f"警告: 原始資料檔案不存在，無法計算縣市特定的人群分析資料")
+            filtered['person']['gender'] = []
+            filtered['person']['age'] = []
     except Exception as e:
         print(f"計算縣市性別年齡分布時發生錯誤: {e}")
         # 發生錯誤時，使用整體資料
