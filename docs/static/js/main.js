@@ -31,7 +31,7 @@ async function loadData() {
         loadingMsg.innerHTML = '<p>正在載入資料...</p>';
         document.body.insertBefore(loadingMsg, document.body.firstChild);
         
-        const response = await fetch('static/data/dengue_analysis.json');
+        const response = await fetch('./static/data/dengue_analysis.json');
         console.log('API 回應狀態:', response.status, response.statusText);
         
         if (!response.ok) {

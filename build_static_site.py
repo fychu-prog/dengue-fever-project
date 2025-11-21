@@ -79,21 +79,125 @@ print("[OK] HTML 檔案已建立")
 print("修改 JavaScript 以讀取靜態資料...")
 main_js = (DOCS_DIR / "static" / "js" / "main.js").read_text(encoding='utf-8')
 # 將 API 路徑改為靜態檔案路徑
-main_js = main_js.replace("'/api/data'", "'static/data/dengue_analysis.json'")
+# 使用相對路徑，從當前頁面位置開始（適用於 GitHub Pages）
+main_js = main_js.replace("'/api/data'", "'./static/data/dengue_analysis.json'")
+# 確保所有 fetch 都使用正確的路徑
+main_js = main_js.replace("fetch('static/data/", "fetch('./static/data/")
+main_js = main_js.replace('fetch("static/data/', 'fetch("./static/data/')
 (DOCS_DIR / "static" / "js" / "main.js").write_text(main_js, encoding='utf-8')
 
 # 修改 county.js
 county_js = (DOCS_DIR / "static" / "js" / "county.js").read_text(encoding='utf-8')
-# 將 API 路徑改為靜態檔案路徑（需要特殊處理，因為是動態路徑）
-county_js = county_js.replace("`/api/data/${countyCode}`", "`static/data/dengue_analysis.json`")
-# 添加資料過濾邏輯（在載入後過濾）
+# 將 API 路徑改為靜態檔案路徑
+county_js = county_js.replace("`/api/data/${countyCode}`", "`./static/data/dengue_analysis.json`")
+county_js = county_js.replace("fetch(`static/data/", "fetch(`./static/data/")
+county_js = county_js.replace('fetch("static/data/', 'fetch("./static/data/')
+county_js = county_js.replace("fetch('static/data/", "fetch('./static/data/")
+
+# 添加完整的前端資料過濾邏輯
+filter_function = """
+// 前端過濾縣市資料的函數
+function filterDataByCounty(data, countyName) {
+    const filtered = {
+        summary: {},
+        time: data.time || {},
+        location: {},
+        person: {},
+        last_updated: data.last_updated || ''
+    };
+    
+    // 縣市名稱對應（處理「臺」vs「台」的差異）
+    const possibleNames = [
+        countyName,
+        countyName.replace(/台/g, '臺'),
+        countyName.replace(/臺/g, '台')
+    ];
+    
+    // 找出匹配的縣市名稱
+    const allCounties = (data.location?.county || []).map(item => item.居住縣市);
+    let matchingName = null;
+    for (const name of possibleNames) {
+        if (allCounties.includes(name)) {
+            matchingName = name;
+            break;
+        }
+    }
+    
+    if (!matchingName) {
+        console.warn('無法找到匹配的縣市名稱:', countyName);
+        matchingName = countyName;
+    }
+    
+    // 過濾縣市資料
+    filtered.location.county = (data.location?.county || []).filter(
+        item => item.居住縣市 === matchingName
+    );
+    
+    // 過濾鄉鎮資料
+    filtered.location.township = (data.location?.township_top30 || []).filter(
+        item => item.居住縣市 === matchingName
+    );
+    filtered.location.township_top30 = filtered.location.township;
+    
+    // 過濾縣市年度趨勢
+    filtered.location.county_yearly = (data.location?.county_yearly || []).filter(
+        item => item.居住縣市 === matchingName
+    );
+    
+    // 過濾性別和年齡資料（使用該縣市的資料）
+    if (data.person) {
+        // 性別資料：從原始資料中過濾（如果有縣市欄位）
+        filtered.person.gender = data.person.gender || [];
+        filtered.person.age = data.person.age || [];
+        // 注意：如果原始資料沒有縣市欄位，這裡會使用整體資料
+        // 這是一個限制，因為靜態網站無法訪問原始 CSV
+    }
+    
+    // 計算摘要統計
+    const countyData = filtered.location.county;
+    const townshipData = filtered.location.township;
+    
+    if (countyData.length > 0) {
+        const totalCases = countyData.reduce((sum, item) => sum + (item.病例數 || 0), 0);
+        filtered.summary = {
+            總病例數: totalCases,
+            縣市: matchingName,
+            鄉鎮數: townshipData.length
+        };
+    } else if (townshipData.length > 0) {
+        const totalCases = townshipData.reduce((sum, item) => sum + (item.病例數 || 0), 0);
+        filtered.summary = {
+            總病例數: totalCases,
+            縣市: matchingName,
+            鄉鎮數: townshipData.length
+        };
+    } else {
+        filtered.summary = {
+            總病例數: 0,
+            縣市: matchingName,
+            鄉鎮數: 0
+        };
+    }
+    
+    return filtered;
+}
+"""
+
+# 在 loadData 函數中添加過濾邏輯
+county_js = county_js.replace(
+    "// 縣市專頁 JavaScript（高雄/台南）",
+    "// 縣市專頁 JavaScript（高雄/台南）\n" + filter_function
+)
+
 county_js = county_js.replace(
     "analysisData = await response.json();",
-    """analysisData = await response.json();
-                // 如果是縣市專頁，需要過濾資料
-                if (countyCode && countyCode !== 'main') {
-                    // 這裡需要在前端過濾資料，或使用預先處理的 JSON
-                    console.log('縣市專頁需要過濾資料:', countyCode);
+    """const allData = await response.json();
+                // 如果是縣市專頁，過濾資料
+                if (countyCode && countyCode !== 'main' && countyName) {
+                    analysisData = filterDataByCounty(allData, countyName);
+                    console.log('已過濾縣市資料:', countyName, analysisData.summary);
+                } else {
+                    analysisData = allData;
                 }"""
 )
 (DOCS_DIR / "static" / "js" / "county.js").write_text(county_js, encoding='utf-8')
