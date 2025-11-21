@@ -204,7 +204,8 @@ function renderTaiwanMap() {
     
     const countyData = analysisData.location.county;
     
-    // 建立縣市名稱對應（統一使用「臺」）
+    // 建立縣市名稱對應（處理「台」vs「臺」的差異）
+    // 資料中使用「台」，GeoJSON 中可能使用「臺」
     const nameMapping = {
         '台北市': '臺北市',
         '台中市': '臺中市',
@@ -212,18 +213,47 @@ function renderTaiwanMap() {
         '台東縣': '臺東縣'
     };
     
-    // 建立病例數對應表
+    // 反向對應（從「臺」到「台」）
+    const reverseMapping = {
+        '臺北市': '台北市',
+        '臺中市': '台中市',
+        '臺南市': '台南市',
+        '臺東縣': '台東縣'
+    };
+    
+    // 建立完整的縣市名稱對應表（包含所有可能的變體）
+    const allNameVariants = {};
+    Object.entries(nameMapping).forEach(([key, value]) => {
+        allNameVariants[key] = value;
+        allNameVariants[value] = key;
+    });
+    
+    // 建立病例數對應表（同時支援「台」和「臺」）
     const casesMap = {};
     const countyNames = [];
     const casesValues = [];
     
     countyData.forEach(item => {
         if (item.居住縣市 === '未知') return;
-        const countyName = nameMapping[item.居住縣市] || item.居住縣市;
-        casesMap[countyName] = item.病例數;
-        countyNames.push(countyName);
+        const originalName = item.居住縣市;
+        const standardName = nameMapping[originalName] || originalName;
+        
+        // 同時儲存兩種名稱格式，以便匹配
+        casesMap[originalName] = item.病例數;
+        if (standardName !== originalName) {
+            casesMap[standardName] = item.病例數;
+        }
+        
+        // 也儲存反向對應（如果有的話）
+        if (reverseMapping[standardName]) {
+            casesMap[reverseMapping[standardName]] = item.病例數;
+        }
+        
+        countyNames.push(standardName);
         casesValues.push(item.病例數);
     });
+    
+    console.log('建立的病例數對應表（所有鍵）:', Object.keys(casesMap));
     
     const maxCases = Math.max(...casesValues);
     
@@ -311,15 +341,72 @@ function renderTaiwanMap() {
             if (!geoCountyName) return;
             
             // 處理名稱差異（台 vs 臺）
-            const standardName = nameMapping[geoCountyName] || geoCountyName;
-            const cases = casesMap[standardName] || casesMap[geoCountyName] || 0;
+            // 嘗試多種匹配方式
+            let cases = 0;
+            let displayName = geoCountyName;
+            
+            // 1. 直接匹配（最優先）
+            if (casesMap[geoCountyName] !== undefined) {
+                cases = casesMap[geoCountyName];
+                displayName = geoCountyName;
+            }
+            // 2. 嘗試標準化名稱（台 -> 臺）
+            else if (nameMapping[geoCountyName]) {
+                const standardName = nameMapping[geoCountyName];
+                if (casesMap[standardName] !== undefined) {
+                    cases = casesMap[standardName];
+                    displayName = standardName;
+                }
+            }
+            // 3. 嘗試反向對應（臺 -> 台）
+            else if (reverseMapping[geoCountyName]) {
+                const originalName = reverseMapping[geoCountyName];
+                if (casesMap[originalName] !== undefined) {
+                    cases = casesMap[originalName];
+                    displayName = originalName;
+                }
+            }
+            // 4. 嘗試部分匹配（移除「市」「縣」等後綴）
+            else {
+                const nameWithoutSuffix = geoCountyName.replace(/[市縣]$/, '');
+                for (const [key, value] of Object.entries(casesMap)) {
+                    const keyWithoutSuffix = key.replace(/[市縣]$/, '');
+                    if (keyWithoutSuffix === nameWithoutSuffix) {
+                        cases = value;
+                        displayName = key;
+                        break;
+                    }
+                }
+            }
+            
+            // 如果還是找不到，嘗試模糊匹配（處理「台」和「臺」的差異）
+            if (cases === 0) {
+                // 將「臺」替換為「台」再試一次
+                const nameWithTai = geoCountyName.replace(/臺/g, '台');
+                if (casesMap[nameWithTai] !== undefined) {
+                    cases = casesMap[nameWithTai];
+                    displayName = nameWithTai;
+                }
+                // 將「台」替換為「臺」再試一次
+                else {
+                    const nameWithTaiTraditional = geoCountyName.replace(/台/g, '臺');
+                    if (casesMap[nameWithTaiTraditional] !== undefined) {
+                        cases = casesMap[nameWithTaiTraditional];
+                        displayName = nameWithTaiTraditional;
+                    }
+                }
+            }
             
             locations.push(geoCountyName);
             z.push(cases);
-            text.push(`${standardName}<br>病例數: ${formatNumber(cases)} 例`);
-            customdata.push(standardName);
+            text.push(`${displayName}<br>病例數: ${formatNumber(cases)} 例`);
+            customdata.push(displayName);
             
-            console.log(`配對: ${geoCountyName} -> ${standardName} = ${cases} 例`);
+            if (cases > 0) {
+                console.log(`✓ 配對成功: ${geoCountyName} -> ${displayName} = ${cases} 例`);
+            } else {
+                console.warn(`⚠ 無法配對: ${geoCountyName} (GeoJSON 中的名稱)`);
+            }
         });
         
         console.log('成功配對縣市數:', locations.length);
@@ -388,10 +475,24 @@ function renderTaiwanMap() {
                 showcountries: false,
                 showframe: false,
                 showcoastlines: false,
+                showlakes: false,
+                showocean: false,
+                showland: false,
                 projection: {
                     type: 'mercator'
                 },
-                bgcolor: 'rgba(0,0,0,0)'
+                bgcolor: 'rgba(0,0,0,0)',
+                // 設定台灣的初始視圖（確保顯示完整台灣）
+                center: {
+                    lon: 120.5,
+                    lat: 23.5
+                },
+                lonaxis: {
+                    range: [119, 122]
+                },
+                lataxis: {
+                    range: [21.5, 25.5]
+                }
             },
             margin: { t: 0, b: 0, l: 0, r: 100 },  // 右側留空間給 colorbar
             height: 600,
