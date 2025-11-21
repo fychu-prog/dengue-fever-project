@@ -244,23 +244,41 @@ def filter_data_by_county(data, county_name):
                 filtered['person']['gender'] = gender.to_dict('records')
                 
                 # 計算該縣市的年齡層分布
-                age = county_df.groupby('年齡層').size().reset_index(name='病例數')
+                # 先處理特殊情況：將單獨的數字（0, 1, 2, 3, 4）合併到 '0-4'
+                county_df_age = county_df.copy()
+                single_digit_ages = ['0', '1', '2', '3', '4']
+                for single_age in single_digit_ages:
+                    county_df_age.loc[county_df_age['年齡層'] == single_age, '年齡層'] = '0-4'
+                
+                age = county_df_age.groupby('年齡層').size().reset_index(name='病例數')
                 age['百分比'] = (age['病例數'] / age['病例數'].sum() * 100).round(2)
                 
-                # 定義年齡層的固定排序順序
+                # 定義年齡層的固定排序順序（包含原始資料中可能出現的格式）
                 age_order = [
                     '0-4', '5-9', '10-14', '15-19', '20-24', '25-29', 
                     '30-34', '35-39', '40-44', '45-49', '50-54', '55-59',
-                    '60-64', '65-69', '70-74', '75-79', '80-84', '85+', '未知'
+                    '60-64', '65-69', '70-74', '75-79', '80-84', '85+', 
+                    '70+',  # 原始資料中可能使用 '70+' 表示所有70歲以上
+                    '未知'
                 ]
                 
                 # 建立排序映射
                 def get_age_order(age_str):
                     if pd.isna(age_str) or age_str == '未知':
                         return len(age_order)
+                    age_str = str(age_str).strip()
+                    # 先嘗試完全匹配
+                    if age_str in age_order:
+                        return age_order.index(age_str)
+                    # 嘗試部分匹配
                     for i, age_range in enumerate(age_order):
-                        if str(age_str) == age_range or str(age_str).startswith(age_range.split('-')[0]):
+                        if age_str == age_range:
                             return i
+                        # 處理範圍格式
+                        if '-' in age_range:
+                            start = age_range.split('-')[0]
+                            if age_str.startswith(start):
+                                return i
                     return len(age_order)
                 
                 age['排序'] = age['年齡層'].apply(get_age_order)
