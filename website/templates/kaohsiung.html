@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高雄市登革熱流行病學監測系統</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body>
+    <!-- 頁首 -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <h1 class="logo">高雄市登革熱流行病學監測系統</h1>
+                <p class="subtitle">Kaohsiung City Dengue Fever Epidemiology Surveillance System</p>
+                <nav class="navbar">
+                    <ul class="navbar-nav">
+                        <li><a href="/">首頁</a></li>
+                        <li><a href="/kaohsiung" class="active">高雄市</a></li>
+                        <li><a href="/tainan">台南市</a></li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主要內容 -->
+    <main class="main-content">
+        <div class="container">
+            <!-- 摘要統計卡片 -->
+            <section class="summary-section">
+                <h2 class="section-title">疫情摘要</h2>
+                <div class="stats-grid" id="summaryStats">
+                    <div class="stat-card">
+                        <div class="stat-label">總病例數</div>
+                        <div class="stat-value" id="totalCases">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">行政區數</div>
+                        <div class="stat-value-small" id="districtCount">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">最多病例行政區</div>
+                        <div class="stat-value-small" id="topDistrict">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">疫情高峰年</div>
+                        <div class="stat-value-small" id="peakYear">-</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 時間分析 -->
+            <section class="analysis-section">
+                <h2 class="section-title">時間分析 (Time Analysis)</h2>
+                <div class="chart-container">
+                    <canvas id="yearlyChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div id="yearlyMonthlyHeatmap" style="width: 100%; height: 100%;"></div>
+                </div>
+            </section>
+
+            <!-- 地理分析 -->
+            <section class="analysis-section">
+                <h2 class="section-title">地理分析 (Geographic Analysis)</h2>
+                <div class="table-container">
+                    <h3 class="table-title">高雄市各行政區登革熱病例統計表</h3>
+                    <table class="county-table" id="districtTable">
+                        <thead>
+                            <tr>
+                                <th>排名</th>
+                                <th>行政區</th>
+                                <th>病例數</th>
+                                <th>百分比</th>
+                            </tr>
+                        </thead>
+                        <tbody id="districtTableBody">
+                            <!-- 由 JavaScript 動態填入 -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="chart-container">
+                    <canvas id="districtChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="districtYearlyChart"></canvas>
+                </div>
+            </section>
+
+            <!-- 人群分析 -->
+            <section class="analysis-section">
+                <h2 class="section-title">人群分析 (Demographic Analysis)</h2>
+                <div class="chart-row">
+                    <div class="chart-container-half">
+                        <canvas id="genderChart"></canvas>
+                    </div>
+                    <div class="chart-container-half">
+                        <canvas id="ageChart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- 頁尾 -->
+    <footer class="footer">
+        <div class="container">
+            <p>資料來源：疾病管制署 | 最後更新：<span id="lastUpdated">-</span></p>
+            <p class="footer-note">本系統僅供學術研究與公共衛生監測使用</p>
+        </div>
+    </footer>
+
+    <script>
+        // 在載入 county.js 之前設定縣市名稱（必須使用 window 物件）
+        window.COUNTY_NAME = '高雄市';
+        window.COUNTY_CODE = 'kaohsiung';
+        console.log('設定縣市變數:', window.COUNTY_NAME, window.COUNTY_CODE);
+    </script>
+    <script src="{{ url_for('static', filename='js/county.js') }}"></script>
+</body>
+</html>
+
