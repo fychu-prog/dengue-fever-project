@@ -1,11 +1,13 @@
 // 縣市專頁 JavaScript（高雄/台南）
 
 let analysisData = null;
+let COUNTY_NAME = null;  // 全域變數，用於圖表標題
 
 // 從 window 物件讀取縣市名稱和代碼（在 DOMContentLoaded 時重新讀取，確保已設置）
 function getCountyInfo() {
     const countyName = window.COUNTY_NAME || '高雄市';
     const countyCode = window.COUNTY_CODE || 'kaohsiung';
+    COUNTY_NAME = countyName;  // 設定全域變數
     console.log('讀取縣市資訊:', countyName, countyCode);
     return { name: countyName, code: countyCode };
 }
@@ -34,6 +36,9 @@ async function loadData(countyCode, countyName) {
             countyCode = info.code;
             countyName = info.name;
         }
+        
+        // 確保 COUNTY_NAME 已設定
+        COUNTY_NAME = countyName || window.COUNTY_NAME || '高雄市';
         
         console.log('開始載入縣市資料...', countyCode, countyName);
         

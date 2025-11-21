@@ -1115,19 +1115,44 @@ function renderGenderYearlyChart() {
     const ctx = document.getElementById('genderYearlyChart').getContext('2d');
     const data = analysisData.person.gender_yearly;
     
+    // 性別標籤和顏色對應（傳統顏色：男藍、女紅）
+    const genderConfig = {
+        'M': { label: '男性', color: '#0093d5' },  // 男性：藍色
+        'F': { label: '女性', color: '#e63946' },  // 女性：紅色
+        'U': { label: '未知', color: '#6c757d' },  // 未知：灰色
+        '男': { label: '男性', color: '#0093d5' },
+        '女': { label: '女性', color: '#e63946' },
+        '未知': { label: '未知', color: '#6c757d' }
+    };
+    
     const genders = [...new Set(data.map(d => d.性別))];
     const years = [...new Set(data.map(d => d.發病年.toString()))].sort();
     
-    const datasets = genders.map((gender, index) => {
-        const colors = ['#0093d5', '#e63946', '#6c757d'];
+    // 確保順序：男性、女性、未知
+    const genderOrder = ['M', 'F', 'U', '男', '女', '未知'];
+    const sortedGenders = [];
+    genderOrder.forEach(key => {
+        if (genders.includes(key)) {
+            sortedGenders.push(key);
+        }
+    });
+    // 加入其他未排序的性別
+    genders.forEach(gender => {
+        if (!genderOrder.includes(gender)) {
+            sortedGenders.push(gender);
+        }
+    });
+    
+    const datasets = sortedGenders.map((gender) => {
+        const config = genderConfig[gender] || { label: gender, color: '#6c757d' };
         return {
-            label: gender,
+            label: config.label,
             data: years.map(year => {
                 const item = data.find(d => d.性別 === gender && d.發病年.toString() === year);
                 return item ? item.病例數 : 0;
             }),
-            borderColor: colors[index % colors.length],
-            backgroundColor: colors[index % colors.length] + '40',
+            borderColor: config.color,
+            backgroundColor: config.color + '40',
             borderWidth: 2,
             fill: false,
             tension: 0.4
