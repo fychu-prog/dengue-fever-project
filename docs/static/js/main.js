@@ -1033,17 +1033,21 @@ function renderGenderChart() {
         }
     });
     
+    // 反轉資料順序以實現逆時針方向繪製
+    const reversedData = [...sortedData].reverse();
+    
     new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: sortedData.map(d => d.label),
+            labels: reversedData.map(d => d.label),
             datasets: [{
-                data: sortedData.map(d => d.病例數),
-                backgroundColor: sortedData.map(d => d.color),
+                data: reversedData.map(d => d.病例數),
+                backgroundColor: reversedData.map(d => d.color),
                 borderWidth: 2
             }]
         },
         options: {
+            rotation: 0, // 從上方開始（-90度 = 12點鐘方向）
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
@@ -1053,7 +1057,32 @@ function renderGenderChart() {
                     font: { size: 16, weight: 'bold' }
                 },
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        // 反轉圖例順序，恢復到原始順序（男性、女性、未知）
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            if (data.labels.length && data.datasets.length) {
+                                // 先按照資料順序生成圖例
+                                const labels = data.labels.map((label, i) => {
+                                    const dataset = data.datasets[0];
+                                    return {
+                                        text: label,
+                                        fillStyle: dataset.backgroundColor[i],
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                                // 反轉圖例順序，恢復到原始順序
+                                return labels.reverse();
+                            }
+                            return [];
+                        },
+                        // 確保圖例按照反轉後的順序排序
+                        sort: function(a, b) {
+                            return b.index - a.index; // 反轉排序
+                        }
+                    }
                 }
             }
         }
@@ -1065,16 +1094,16 @@ function renderAgeChart() {
     const ctx = document.getElementById('ageChart').getContext('2d');
     const data = analysisData.person.age; // 已經在後端按固定順序排序
     
-    // 定義年齡層的固定排序順序
+    // 定義年齡層的固定排序順序（與後端保持一致，使用 '70+' 表示所有70歲以上）
     const ageOrder = [
         '0-4', '5-9', '10-14', '15-19', '20-24', '25-29', 
         '30-34', '35-39', '40-44', '45-49', '50-54', '55-59',
-        '60-64', '65-69', '70-74', '75-79', '80-84', '85+', '未知'
+        '60-64', '65-69', '70+', '未知'
     ];
     
     // 確保資料按固定順序排列
     const sortedData = ageOrder.map(age => {
-        const found = data.find(d => d.年齡層 === age || d.年齡層.startsWith(age.split('-')[0]));
+        const found = data.find(d => d.年齡層 === age);
         return found || { 年齡層: age, 病例數: 0 };
     }).filter(d => d.病例數 > 0 || d.年齡層 === '未知'); // 只顯示有資料的年齡層
     
