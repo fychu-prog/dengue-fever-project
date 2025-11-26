@@ -132,6 +132,84 @@ def get_county_data(county):
         return jsonify({'error': str(e)}), 500
 
 
+def generate_complete_township_data(county_name, existing_township_data):
+    """生成完整的行政區列表（包含所有行政區，即使病例數為 0）"""
+    try:
+        # 從 GeoJSON 中讀取該縣市的所有行政區
+        geojson_file = STATIC_DATA_DIR / "taiwan_township.geojson"
+        if not geojson_file.exists():
+            print(f"警告: GeoJSON 檔案不存在，使用現有資料")
+            return existing_township_data
+        
+        with open(geojson_file, 'r', encoding='utf-8') as f:
+            geo = json.load(f)
+        
+        # 提取該縣市的所有行政區名稱
+        all_townships = set()
+        county_variants = [
+            county_name,
+            county_name.replace('台', '臺'),
+            county_name.replace('臺', '台')
+        ]
+        
+        for feature in geo['features']:
+            props = feature['properties']
+            feature_county = props.get('COUNTYNAME', '')
+            feature_township = props.get('TOWNNAME', '')
+            
+            if feature_township and any(variant in feature_county for variant in county_variants):
+                all_townships.add(feature_township)
+        
+        print(f"從 GeoJSON 中找到 {county_name} 的 {len(all_townships)} 個行政區")
+        
+        # 建立現有資料的病例數對應表
+        existing_cases = {}
+        for item in existing_township_data:
+            township = item.get('居住鄉鎮', '')
+            if township:
+                existing_cases[township] = item.get('病例數', 0)
+        
+        # 如果原始資料存在，從中讀取更完整的病例數
+        if RAW_DATA.exists():
+            df = pd.read_csv(RAW_DATA, encoding='utf-8-sig', low_memory=False)
+            
+            # 找出匹配的縣市名稱
+            matching_county = None
+            for variant in county_variants:
+                matching = df[df['居住縣市'] == variant]
+                if len(matching) > 0:
+                    matching_county = variant
+                    break
+            
+            if matching_county:
+                county_df = df[df['居住縣市'] == matching_county].copy()
+                township_counts = county_df.groupby('居住鄉鎮').size().reset_index(name='病例數')
+                
+                for _, row in township_counts.iterrows():
+                    township = row['居住鄉鎮']
+                    cases = int(row['病例數'])
+                    if pd.notna(township) and township != '未知' and township != '其他':
+                        existing_cases[township] = cases
+        
+        # 生成完整列表
+        complete_list = []
+        for township in sorted(all_townships):
+            complete_list.append({
+                '居住縣市': county_name,
+                '居住鄉鎮': township,
+                '病例數': existing_cases.get(township, 0)
+            })
+        
+        # 按病例數排序（降序）
+        complete_list.sort(key=lambda x: x['病例數'], reverse=True)
+        
+        return complete_list
+    except Exception as e:
+        print(f"生成完整行政區列表時發生錯誤: {e}")
+        # 發生錯誤時，返回現有資料
+        return existing_township_data
+
+
 def filter_data_by_county(data, county_name):
     """過濾特定縣市的資料"""
     filtered = {
@@ -178,9 +256,13 @@ def filter_data_by_county(data, county_name):
         # 鄉鎮統計（只保留該縣市的鄉鎮）
         township_data = [item for item in data['location'].get('township_top30', [])
                         if item.get('居住縣市') == matching_county_name]
-        filtered['location']['township'] = township_data
-        filtered['location']['township_top30'] = township_data
-        print(f"過濾鄉鎮資料: 找到 {len(township_data)} 筆鄉鎮記錄")
+        
+        # 生成完整的行政區列表（包含所有行政區，即使病例數為 0）
+        # 這對於地圖顯示很重要，因為地圖需要顯示所有行政區
+        complete_township_data = generate_complete_township_data(matching_county_name, township_data)
+        filtered['location']['township'] = complete_township_data
+        filtered['location']['township_top30'] = township_data  # 保留 top30 用於其他用途
+        print(f"過濾鄉鎮資料: 找到 {len(township_data)} 筆 top30 記錄，完整列表 {len(complete_township_data)} 筆")
         
         # 縣市年度趨勢（只保留該縣市）
         county_yearly = [item for item in data['location'].get('county_yearly', [])

@@ -24,6 +24,29 @@ PROCESSED_DIR = DATA_DIR / "processed"
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def normalize_county_names(df):
+    """統一縣市名稱（處理「台」vs「臺」和縣市合併）"""
+    print("正在統一縣市名稱...")
+    
+    # 統一為「臺」（繁體字），與 GeoJSON 保持一致
+    df['居住縣市'] = df['居住縣市'].astype(str).str.replace('台', '臺', regex=False)
+    
+    # 應用縣市合併規則（2010年合併）
+    county_merger_map = {
+        '臺中縣': '臺中市',
+        '臺南縣': '臺南市',
+        '高雄縣': '高雄市',
+        '臺北縣': '新北市',
+    }
+    df['居住縣市'] = df['居住縣市'].replace(county_merger_map)
+    
+    # 統計統一後的縣市
+    county_counts = df['居住縣市'].value_counts()
+    print(f"統一後共有 {len(county_counts)} 個不同的縣市")
+    
+    return df
+
+
 def load_and_clean_data():
     """載入並清理資料"""
     print("正在載入資料...")
@@ -32,6 +55,9 @@ def load_and_clean_data():
     df = pd.read_csv(RAW_DATA, encoding='utf-8-sig', low_memory=False)
     
     print(f"原始資料筆數: {len(df)}")
+    
+    # 統一縣市名稱（處理「台」vs「臺」和縣市合併）
+    df = normalize_county_names(df)
     
     # 清理日期欄位
     df['發病日期'] = pd.to_datetime(df['發病日'], errors='coerce')

@@ -1033,17 +1033,21 @@ function renderGenderChart() {
         }
     });
     
+    // 反轉資料順序以實現逆時針方向繪製
+    const reversedData = [...sortedData].reverse();
+    
     new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: sortedData.map(d => d.label),
+            labels: reversedData.map(d => d.label),
             datasets: [{
-                data: sortedData.map(d => d.病例數),
-                backgroundColor: sortedData.map(d => d.color),
+                data: reversedData.map(d => d.病例數),
+                backgroundColor: reversedData.map(d => d.color),
                 borderWidth: 2
             }]
         },
         options: {
+            rotation: 0, // 從上方開始（-90度 = 12點鐘方向）
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
@@ -1053,7 +1057,32 @@ function renderGenderChart() {
                     font: { size: 16, weight: 'bold' }
                 },
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        // 反轉圖例順序，恢復到原始順序（男性、女性、未知）
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            if (data.labels.length && data.datasets.length) {
+                                // 先按照資料順序生成圖例
+                                const labels = data.labels.map((label, i) => {
+                                    const dataset = data.datasets[0];
+                                    return {
+                                        text: label,
+                                        fillStyle: dataset.backgroundColor[i],
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                                // 反轉圖例順序，恢復到原始順序
+                                return labels.reverse();
+                            }
+                            return [];
+                        },
+                        // 確保圖例按照反轉後的順序排序
+                        sort: function(a, b) {
+                            return b.index - a.index; // 反轉排序
+                        }
+                    }
                 }
             }
         }

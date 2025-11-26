@@ -151,6 +151,38 @@
             console.log('DOM 已載入');
         }
     </script>
+    
+    <div class="floating-nav">
+        <a href="/" class="floating-nav__btn floating-nav__btn--active">全台灣</a>
+        <a href="/kaohsiung" class="floating-nav__btn">高雄市</a>
+        <a href="/tainan" class="floating-nav__btn">台南市</a>
+    </div>
+    
+    <!-- 回到頂部按鈕 -->
+    <button id="backToTop" class="back-to-top" aria-label="回到頂部">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 15l-6-6-6 6"/>
+        </svg>
+    </button>
+    <script>
+        // 回到頂部按鈕功能
+        const backToTopBtn = document.getElementById('backToTop');
+        
+        window.addEventListener('scroll', function() {
+            if (window.pageYOffset > 300) {
+                backToTopBtn.classList.add('show');
+            } else {
+                backToTopBtn.classList.remove('show');
+            }
+        });
+        
+        backToTopBtn.addEventListener('click', function() {
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+    </script>
 </body>
 </html>
 
