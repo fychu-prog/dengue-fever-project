@@ -1217,14 +1217,22 @@ function renderGenderYearlyChart() {
 function renderImportStatusChart() {
     const ctx = document.getElementById('importStatusChart').getContext('2d');
     const data = analysisData.person.import_status;
+    const labelColorMap = {
+        '境外移入': '#e63946',
+        '本土病例': '#00a651'
+    };
+    
+    const labels = data.map(d => d.是否境外移入 === '是' ? '境外移入' : '本土病例');
+    const chartData = data.map(d => d.病例數);
+    const backgroundColors = labels.map(label => labelColorMap[label] || '#0093d5');
     
     new Chart(ctx, {
         type: 'pie',
         data: {
-            labels: data.map(d => d.是否境外移入 === '是' ? '境外移入' : '本土病例'),
+            labels: labels,
             datasets: [{
-                data: data.map(d => d.病例數),
-                backgroundColor: ['#e63946', '#00a651'],
+                data: chartData,
+                backgroundColor: backgroundColors,
                 borderWidth: 2
             }]
         },
@@ -1252,17 +1260,22 @@ function renderImportYearlyChart() {
     
     const statuses = [...new Set(data.map(d => d.是否境外移入))];
     const years = [...new Set(data.map(d => d.發病年.toString()))].sort();
+    const labelColorMap = {
+        '境外移入': '#e63946',
+        '本土病例': '#00a651'
+    };
     
     const datasets = statuses.map((status, index) => {
-        const colors = ['#00a651', '#e63946'];
+        const label = status === '是' ? '境外移入' : '本土病例';
+        const color = labelColorMap[label] || '#0093d5';
         return {
-            label: status === '是' ? '境外移入' : '本土病例',
+            label: label,
             data: years.map(year => {
                 const item = data.find(d => d.是否境外移入 === status && d.發病年.toString() === year);
                 return item ? item.病例數 : 0;
             }),
-            borderColor: colors[index % colors.length],
-            backgroundColor: colors[index % colors.length] + '40',
+            borderColor: color,
+            backgroundColor: color + '40',
             borderWidth: 2,
             fill: false,
             tension: 0.4
